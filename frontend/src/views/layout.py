@@ -3,11 +3,18 @@ from src.components.base_screen import BaseScreen
 from src.components.button import Button
 from src.components.switch import Switch
 from src.components.label import Label
-from src.views.registrations import Registrations
+from src.components.tabview import Tabview
+from src.views.pages.colaborador import EmployeePage
 
 class LayoutSystem(BaseScreen):
     def __init__(self, titulo='RH', min_width = 800, min_height = 600):
         super().__init__(titulo, min_width, min_height)
+        
+        self.tabs_config = {
+            "Cadastros": [('Setor', None),('Cargo', None),('Colaborador', EmployeePage), ('Diretoria', None)],
+            "Holerites": [('Enviar holerites', None)],
+            "Relatórios": [('Setores', None), ('Cargos', None), ('Colaboradores', None)]
+        }
 
         # Configuração do Grid principal da janela
         self.grid_columnconfigure(1, weight=1)
@@ -31,12 +38,10 @@ class LayoutSystem(BaseScreen):
         Label(self.lateral_menu, text="Gestão de Colaboradores", font=("Arial", 10)).pack(pady=(0,20))
 
         # Lista de itens do menu lateral
-        self.list_items = [{'name':'Cadastros','page':Registrations},
-                           {'name':'Holerites','page':''},
-                           {'name': 'Relatórios', 'page': ''}]
+        self.list_items = ['Cadastros','Holerites','Relatórios']
         # Execução da lista do menu lateral
         for item in self.list_items:
-            Button(self.lateral_menu, text=item['name'], command=self.load_data_item(item['page'])).pack(pady=10, padx=5)
+            Button(self.lateral_menu, text=item, command=lambda valor=item: self.load_tab(valor)).pack(pady=10, padx=5)
 
         # Carregar o botão switch (modo escuro) no menu lateral
         self.load_switch_lateral_menu()
@@ -56,13 +61,40 @@ class LayoutSystem(BaseScreen):
 
     def load_main_data(self):
         Label(self.main_data, text="Colaboradores", font=("Arial", 30)).pack(pady=10)
-
-    def limpar_area_dados(self):
-        # Destrói tudo o que estiver atualmente na área da direita
-        for widget in self.data_area.winfo_children():
+        
+    def clear_main_area(self):
+        for widget in self.main_data.winfo_children():
             widget.destroy()
+        
+    def load_tab(self, item):
+        # Limpa área principal antes de desenhar o novo painel
+        self.clear_main_area()
 
-    def load_data_item(self, tab):
-        self.limpar_area_dados()
+        # Pega a lista de abas correspondente ao botão clicado
+        tabs_to_create = self.tabs_config.get(item, [])
 
-        self.main_data = tab
+        if not tabs_to_create:
+            return
+
+        # Cria o CTkTabview dentro da área principal
+        self.current_tabview = Tabview(self.main_data)
+        self.current_tabview.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # 4. Adiciona cada aba dinamicamente usando um loop
+        for tab_name, PageClass in tabs_to_create:
+            # Cria a aba e retorna o frame dela
+            self.tab_frame = self.current_tabview.add(tab_name)
+            
+            # Colocar um título dentro de cada aba criada
+            Label(
+                self.tab_frame, 
+                text=f"Painel de {tab_name}", 
+                font=("Arial", 20, "bold")
+            ).pack(pady=20, padx=20)
+            
+            # Instancia a página passando a aba como master (pai)
+            if PageClass:
+                instance_page = PageClass(master=self.tab_frame)
+                instance_page.pack(fill="both", expand=True)
+            
+

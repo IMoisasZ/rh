@@ -13,6 +13,7 @@ def create_colaborador(colaborador_data: ColaboradorCreate, db: Session = Depend
     try:
         return ColaboradorService.create_colaborador(db=db, colaborador_data=colaborador_data)
     except SQLAlchemyError as e:
+        print("router: ",e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Não foi possivel incluir o colaborador {colaborador_data.nome}!'

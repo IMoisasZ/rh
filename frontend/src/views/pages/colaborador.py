@@ -1,9 +1,13 @@
+import requests
 import customtkinter as ctk
+from CTkMessagebox import CTkMessagebox
+from src.utils.class_utils import Utils
 from src.components.tabview import Tabview
 from src.components.label import Label
 from src.components.input import Input
 from src.components.select import Select
 from src.components.button import Button
+from src.components.message import Message
 
 class EmployeePage(ctk.CTkFrame):
     def __init__(self, master, **kwargs):
@@ -44,7 +48,7 @@ class EmployeePage(ctk.CTkFrame):
                 self.regime_label.grid(row=2, column=1, sticky='w', padx=5, pady=(5,0))
                                 
                 self.regime_values = ['CLT','PJ','Diretoria']
-                self.regime = Select(tab_frame, values=self.regime_values)
+                self.regime = Select(tab_frame, values=self.regime_values, command=self.ao_mudar_regime)
                 self.regime.grid(row=3, column=1, sticky='ew', padx=5, pady=(0,15))
                 
                 # Data de Nascimento (Coluna 2)
@@ -53,7 +57,7 @@ class EmployeePage(ctk.CTkFrame):
                 
                 self.birthday = Input(tab_frame, placeholder_text="DD/MM/AAAA")
                 self.birthday.grid(row=3, column=2, sticky='ew', padx=5, pady=(0,15))
-                self.birthday._entry.bind("<KeyRelease>", lambda event: self.aplicar_mascara_data(self.birthday))
+                self.birthday._entry.bind("<KeyRelease>", lambda event: Utils.aplicar_mascara_data(self.birthday))
                 
                 # CPF (Coluna 3)
                 self.cpf_label = Label(tab_frame, text="CPF")
@@ -101,7 +105,7 @@ class EmployeePage(ctk.CTkFrame):
                 
                 self.initial_date = Input(tab_frame, placeholder_text="DD/MM/AAAA")
                 self.initial_date.grid(row=7, column=0, sticky='ew', padx=5, pady=(0,15))
-                self.initial_date._entry.bind("<KeyRelease>", lambda event: self.aplicar_mascara_data(self.initial_date))
+                self.initial_date._entry.bind("<KeyRelease>", lambda event: Utils.aplicar_mascara_data(self.initial_date))
                 
                 # Data Término (Coluna 1)
                 self.final_date_label = Label(tab_frame, text="Data término")
@@ -116,25 +120,114 @@ class EmployeePage(ctk.CTkFrame):
                 frame_btn.grid(row=8, column=0, columnspan=5, pady=(35, 20))
 
                 # Botão Salvar (dentro do mini frame)
-                self.btn_save = Button(frame_btn, text="Salvar Colaborador", width=180, cursor='hand2')
+                self.btn_save = Button(frame_btn, text="Salvar Colaborador", width=180, cursor='hand2', command=self.enviar_dados_api)
                 self.btn_save.pack(side="left", padx=10)
 
                 # Botão Cancelar/Voltar ao lado (dentro do mini frame)
                 self.btn_cancel = Button(frame_btn, text="Cancelar", width=180, fg_color="gray", cursor='hand2') # Exemplo de cor diferente
                 self.btn_cancel.pack(side="left", padx=10)
+
+    def enviar_dados_api(self):
+        # Converte as datas antes de enviar para o formato YYYY-MM-DD
+        data_nasc_iso = Utils.converter_data_para_iso(self.birthday.get())
+        data_inicio_iso = Utils.converter_data_para_iso(self.initial_date.get())
+        data_termino_iso = Utils.converter_data_para_iso(self.final_date.get()) if self.final_date.get() else None
+
+        dados_colaborador = {
+            "status": "ATIVO",
+            "nome": self.name.get(),
+            "regime": self.regime.get(),
+            "data_nascimento": data_nasc_iso,
+            "cpf": self.cpf.get(),
+            "rg": self.rg.get(),
+            "setor_id": int(self.setor.get()) if self.setor.get() else None,
+            "cargo_id": int(self.cargo.get()) if self.cargo.get() else None,
+            "gestor_id": int(self.gestor.get()) if self.gestor.get() else None,  # <--- Alterado de 'gestor' para 'gestor_id' e convertido para int
+            "data_inicio": data_inicio_iso,
+            "data_termino": data_termino_iso
+        }
+
+        url_api = "http://127.0.0.1:8000/api/v1/colaboradores/"
+
+        try:
+            print("Enviando dados para a API...", dados_colaborador)
+            resposta = requests.post(url_api, json=dados_colaborador)
+
+            if resposta.status_code in [200, 201]:
+                print("Sucesso! Colaborador cadastrado:", resposta.json())
+                Message.show_message(msg="Colaborador cadastro com sucesso!", option_1="Ok", title="Sucesso", icon="success")
+
+                if self.regime.get() == "PJ":
+                    self.adicionar_aba_pj()
+                    # Opcional: já mudar o foco para a nova aba criada
+                    self.tab_view_employee.set("Dados PJ")
+            else:
+                print(f"Erro da API ({resposta.status_code}):", resposta.text)
                 
-    def aplicar_mascara_data(self, input_field):
-        texto = input_field.get()
-        numeros = "".join(filter(str.isdigit, texto))
-        numeros = numeros[:8]
+                try:
+                    erro_json = resposta.json()
+                    
+                    # O FastAPI costuma retornar os erros de validação na chave "detail"
+                    detalhe = erro_json.get("detail", "Erro desconhecido")
+                    
+                    # Se for uma lista de erros (comum no Pydantic/422)
+                    if isinstance(detalhe, list) and len(detalhe) > 0:
+                        # Pega o primeiro erro da lista e extrai a chave 'msg'
+                        mensagem_amigavel = detalhe[0].get("msg", str(detalhe))
+                    elif isinstance(detalhe, str):
+                        # Se for uma string simples (como os erros 400 customizados)
+                        mensagem_amigavel = detalhe
+                    else:
+                        mensagem_amigavel = str(detalhe)
+                        
+                except Exception:
+                    mensagem_amigavel = resposta.text
+
+                # Exibe a mensagem limpa na caixa de diálogo
+                Message.show_message(msg=mensagem_amigavel, title='Atenção', icon='error', option_1='OK')
+                
+        except requests.exceptions.ConnectionError:
+            print("Erro de Conexão: Não foi possível conectar ao FastAPI.")
+            Message.show_message(msg="Não foi possível conectar ao servidor da API.\nVerifique se o FastAPI está rodando.",
+                                 option_1="OK",
+                                 title="Erro de conexão",
+                                 icon="warning")
+
+    def ao_mudar_regime(self, escolha):
+        """Função chamada sempre que o usuário altera o tipo de regime no combobox"""
+        abas_atuais = self.tab_view_employee.get() # Pega a aba ativa atualmente
         
-        nova_string = ""
-        if len(numeros) > 0:
-            nova_string += numeros[:2]
-        if len(numeros) >= 3:
-            nova_string += "/" + numeros[2:4]
-        if len(numeros) >= 5:
-            nova_string += "/" + numeros[4:8]
+        if escolha == "PJ":
+            # Verifica se a aba PJ já existe antes de adicionar para não duplicar
+            if "Dados PJ" not in self.tab_view_employee._tab_dict:
+                self.tab_view_employee.add("Dados PJ")
+                # Aqui você constrói os campos da aba PJ igual fizemos antes
+                self.construir_campos_pj()
+        else:
+            # Se mudou para CLT (ou outro), remove a aba PJ se ela existir
+            if "Dados PJ" in self.tab_view_employee._tab_dict:
+                # Se o usuário estiver com a aba PJ aberta na hora que mudou, voltamos para 'Dados principais'
+                if self.tab_view_employee.get() == "Dados PJ":
+                    self.tab_view_employee.set("Dados principais")
+                self.tab_view_employee.delete("Dados PJ")
+
+    def construir_campos_pj(self):
+        """Constrói os inputs dentro da aba PJ"""
+        tab_pj = self.tab_view_employee.tab("Dados PJ")
+        
+        # Configuração do grid da aba PJ
+        for col in range(3):
+            tab_pj.grid_columnconfigure(col, weight=1)
             
-        input_field.delete(0, "end")
-        input_field.insert(0, nova_string)
+        # Exemplo de campos PJ
+        self.label_cnpj = Label(tab_pj, text="CNPJ")
+        self.label_cnpj.grid(row=0, column=0, sticky='w', padx=5, pady=(5,0))
+        
+        self.cnpj = Input(tab_pj, placeholder_text="00.000.000/0001-00")
+        self.cnpj.grid(row=1, column=0, sticky='ew', padx=5, pady=(0,15))
+        
+        self.label_razao = Label(tab_pj, text="Razão Social")
+        self.label_razao.grid(row=0, column=1, sticky='w', padx=5, pady=(5,0))
+        
+        self.razao_social = Input(tab_pj, placeholder_text="Nome da empresa")
+        self.razao_social.grid(row=1, column=1, sticky='ew', padx=5, pady=(0,15))

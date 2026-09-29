@@ -30,7 +30,7 @@ class Colaborador(Base):
     cargo_id: Mapped[int] = mapped_column(Integer, nullable=False)
     gestor_id: Mapped[int] = mapped_column(Integer, ForeignKey("colaborador.id"), nullable=False)
     data_inicio: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    data_termino: Mapped[datetime] = mapped_column(DateTime)
+    data_termino: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda:datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda:datetime.now(timezone.utc), onupdate=lambda:datetime.now(timezone.utc))
 

@@ -54,7 +54,6 @@ class LayoutSystem(BaseScreen):
     def change_mode_screen(self):
         actual_mode = ctk.get_appearance_mode()
         if actual_mode == "Dark":
-
             ctk.set_appearance_mode("Light")
         else:
             ctk.set_appearance_mode("Dark")
